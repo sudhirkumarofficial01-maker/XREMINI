@@ -1,11 +1,15 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  await MobileAds.instance.initialize();
+
   runApp(const XReminiApp());
 }
 
@@ -43,9 +47,150 @@ class _HomeScreenState extends State<HomeScreen> {
 
   int credits = 5;
   bool picking = false;
+  bool loadingAd = false;
+
+  RewardedAd? _rewardedAd;
+
+  // Google official TEST Rewarded Ad ID
+  static const String rewardedAdUnitId =
+      'ca-app-pub-3940256099942544/5224354917';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRewardedAd();
+  }
+
+  @override
+  void dispose() {
+    _rewardedAd?.dispose();
+    super.dispose();
+  }
+
+  // ==========================================================
+  // LOAD REWARDED AD
+  // ==========================================================
+
+  void _loadRewardedAd() {
+    if (loadingAd) return;
+
+    setState(() {
+      loadingAd = true;
+    });
+
+    RewardedAd.load(
+      adUnitId: rewardedAdUnitId,
+      request: const AdRequest(),
+      rewardedAdLoadCallback: RewardedAdLoadCallback(
+        onAdLoaded: (RewardedAd ad) {
+          if (!mounted) {
+            ad.dispose();
+            return;
+          }
+
+          _rewardedAd = ad;
+
+          setState(() {
+            loadingAd = false;
+          });
+
+          _rewardedAd!.fullScreenContentCallback =
+              FullScreenContentCallback(
+            onAdDismissedFullScreenContent: (RewardedAd ad) {
+              ad.dispose();
+              _rewardedAd = null;
+              _loadRewardedAd();
+            },
+            onAdFailedToShowFullScreenContent:
+                (RewardedAd ad, AdError error) {
+              ad.dispose();
+              _rewardedAd = null;
+
+              if (mounted) {
+                setState(() {
+                  loadingAd = false;
+                });
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'Ad could not be shown. Please try again.',
+                    ),
+                  ),
+                );
+              }
+
+              _loadRewardedAd();
+            },
+          );
+        },
+        onAdFailedToLoad: (LoadAdError error) {
+          _rewardedAd = null;
+
+          if (mounted) {
+            setState(() {
+              loadingAd = false;
+            });
+          }
+        },
+      ),
+    );
+  }
+
+  // ==========================================================
+  // WATCH AD +2 CREDITS
+  // ==========================================================
+
+  void watchRewardedAd() {
+    if (_rewardedAd == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Ad is loading. Please try again in a moment.',
+          ),
+        ),
+      );
+
+      _loadRewardedAd();
+      return;
+    }
+
+    final RewardedAd ad = _rewardedAd!;
+    _rewardedAd = null;
+
+    ad.show(
+      onUserEarnedReward: (
+        AdWithoutView ad,
+        RewardItem reward,
+      ) {
+        if (!mounted) return;
+
+        setState(() {
+          credits += 2;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              '🎉 +2 Credits added successfully!',
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // ==========================================================
+  // PICK PHOTO
+  // ==========================================================
 
   Future<void> pickPhoto() async {
     if (picking) return;
+
+    if (credits <= 0) {
+      showNoCredits();
+      return;
+    }
 
     setState(() {
       picking = true;
@@ -93,6 +238,20 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     }
   }
+
+  void showNoCredits() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'No credits. Watch an ad to get +2 credits.',
+        ),
+      ),
+    );
+  }
+
+  // ==========================================================
+  // HOME SCREEN
+  // ==========================================================
 
   @override
   Widget build(BuildContext context) {
@@ -164,13 +323,14 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
 
-              const SizedBox(height: 35),
+              const SizedBox(height: 30),
 
+              // CHOOSE PHOTO
               GestureDetector(
                 onTap: credits > 0 ? pickPhoto : showNoCredits,
                 child: Container(
                   width: double.infinity,
-                  height: 230,
+                  height: 210,
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(28),
                     gradient: const LinearGradient(
@@ -198,9 +358,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           color: Colors.white,
                         ),
                       ),
-
                       const SizedBox(height: 18),
-
                       const Text(
                         'Choose a Photo',
                         style: TextStyle(
@@ -208,9 +366,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-
                       const SizedBox(height: 7),
-
                       Text(
                         credits > 0
                             ? 'Tap to select a photo'
@@ -224,7 +380,36 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
 
-              const SizedBox(height: 28),
+              const SizedBox(height: 18),
+
+              // REWARDED AD
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: loadingAd ? null : watchRewardedAd,
+                  icon: const Icon(
+                    Icons.play_circle_fill,
+                  ),
+                  label: Text(
+                    loadingAd
+                        ? 'Loading Ad...'
+                        : 'Watch Ad  •  +2 Credits',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 16,
+                    ),
+                    side: const BorderSide(
+                      color: Color(0xFF7C4DFF),
+                    ),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 25),
 
               const Text(
                 'Enhance modes',
@@ -236,8 +421,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
               const SizedBox(height: 15),
 
-              Row(
-                children: const [
+              const Row(
+                children: [
                   Expanded(
                     child: ModeCard(
                       icon: Icons.face_retouching_natural,
@@ -280,17 +465,11 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
-
-  void showNoCredits() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'No credits. Rewarded ads will be added next.',
-        ),
-      ),
-    );
-  }
 }
+
+// ============================================================
+// MODE CARD
+// ============================================================
 
 class ModeCard extends StatelessWidget {
   final IconData icon;
@@ -305,7 +484,9 @@ class ModeCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 18),
+      padding: const EdgeInsets.symmetric(
+        vertical: 18,
+      ),
       decoration: BoxDecoration(
         color: const Color(0xFF151515),
         borderRadius: BorderRadius.circular(18),
@@ -332,6 +513,10 @@ class ModeCard extends StatelessWidget {
     );
   }
 }
+
+// ============================================================
+// ENHANCE SCREEN
+// ============================================================
 
 class EnhanceScreen extends StatefulWidget {
   final File file;
@@ -367,7 +552,9 @@ class _EnhanceScreenState extends State<EnhanceScreen> {
     if (widget.credits <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('No credits available.'),
+          content: Text(
+            'No credits available. Watch an ad to earn more.',
+          ),
         ),
       );
       return;
@@ -377,7 +564,9 @@ class _EnhanceScreenState extends State<EnhanceScreen> {
       processing = true;
     });
 
-    await Future.delayed(const Duration(seconds: 2));
+    await Future.delayed(
+      const Duration(seconds: 2),
+    );
 
     if (!mounted) return;
 
@@ -388,6 +577,10 @@ class _EnhanceScreenState extends State<EnhanceScreen> {
       enhanced = true;
     });
   }
+
+  // ==========================================================
+  // SAVE PHOTO
+  // ==========================================================
 
   Future<void> savePhoto() async {
     try {
@@ -492,7 +685,8 @@ class _EnhanceScreenState extends State<EnhanceScreen> {
                           ),
                           decoration: BoxDecoration(
                             color: Colors.green.withOpacity(.9),
-                            borderRadius: BorderRadius.circular(15),
+                            borderRadius:
+                                BorderRadius.circular(15),
                           ),
                           child: const Row(
                             children: [
@@ -511,10 +705,13 @@ class _EnhanceScreenState extends State<EnhanceScreen> {
               ),
             ),
 
+            // MODES
             SizedBox(
               height: 58,
               child: ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                ),
                 scrollDirection: Axis.horizontal,
                 itemCount: modes.length,
                 itemBuilder: (context, index) {
@@ -527,7 +724,9 @@ class _EnhanceScreenState extends State<EnhanceScreen> {
                       });
                     },
                     child: Container(
-                      margin: const EdgeInsets.only(right: 10),
+                      margin: const EdgeInsets.only(
+                        right: 10,
+                      ),
                       padding: const EdgeInsets.symmetric(
                         horizontal: 20,
                       ),
@@ -535,7 +734,8 @@ class _EnhanceScreenState extends State<EnhanceScreen> {
                         color: selected
                             ? const Color(0xFF7C4DFF)
                             : const Color(0xFF181818),
-                        borderRadius: BorderRadius.circular(18),
+                        borderRadius:
+                            BorderRadius.circular(18),
                       ),
                       alignment: Alignment.center,
                       child: Text(
@@ -550,6 +750,7 @@ class _EnhanceScreenState extends State<EnhanceScreen> {
               ),
             ),
 
+            // BUTTONS
             Padding(
               padding: const EdgeInsets.all(16),
               child: Row(
@@ -573,7 +774,8 @@ class _EnhanceScreenState extends State<EnhanceScreen> {
 
                   Expanded(
                     child: FilledButton.icon(
-                      onPressed: enhanced ? savePhoto : processPhoto,
+                      onPressed:
+                          enhanced ? savePhoto : processPhoto,
                       icon: Icon(
                         enhanced
                             ? Icons.download
