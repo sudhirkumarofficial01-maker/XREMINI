@@ -28,6 +28,12 @@ jobs:
           rm -rf build_app/lib
           cp -r lib build_app/lib
 
+      - name: Set Android compile SDK
+        working-directory: build_app
+        run: |
+          sed -i 's/compileSdk = flutter.compileSdkVersion/compileSdk = 35/' android/app/build.gradle
+          grep -n "compileSdk" android/app/build.gradle
+
       - name: Install dependencies
         working-directory: build_app
         run: flutter pub get
