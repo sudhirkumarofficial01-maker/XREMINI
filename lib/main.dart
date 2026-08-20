@@ -1,7 +1,11 @@
 import 'dart:io';
+
 import 'package:flutter/material.dart';
-import 'package:gal/gal.dart';
+import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
+import 'package:image_picker/image_picker.dart';
+
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const XReminiApp());
 }
 
@@ -14,93 +18,18 @@ class XReminiApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'XRemini',
       theme: ThemeData(
+        useMaterial3: true,
         brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF090A0F),
+        scaffoldBackgroundColor: const Color(0xFF080808),
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF7656FF),
+          seedColor: const Color(0xFF7C4DFF),
           brightness: Brightness.dark,
         ),
-        useMaterial3: true,
       ),
-      home: const SplashScreen(),
+      home: const HomeScreen(),
     );
   }
 }
-
-// ---------------- SPLASH ----------------
-
-class SplashScreen extends StatefulWidget {
-  const SplashScreen({super.key});
-
-  @override
-  State<SplashScreen> createState() => _SplashScreenState();
-}
-
-class _SplashScreenState extends State<SplashScreen> {
-  @override
-  void initState() {
-    super.initState();
-
-    Future.delayed(const Duration(seconds: 2), () {
-      if (!mounted) return;
-
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => const HomeScreen(),
-        ),
-      );
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 90,
-              height: 90,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(25),
-                gradient: const LinearGradient(
-                  colors: [
-                    Color(0xFF8B6CFF),
-                    Color(0xFF4C2EDB),
-                  ],
-                ),
-              ),
-              child: const Icon(
-                Icons.auto_awesome,
-                size: 50,
-                color: Colors.white,
-              ),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              'XRemini',
-              style: TextStyle(
-                fontSize: 34,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: 5),
-            Text(
-              'AI Photo Enhancer',
-              style: TextStyle(
-                color: Colors.white.withOpacity(.55),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ---------------- HOME ----------------
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -110,118 +39,82 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  final ImagePicker _picker = ImagePicker();
+
   int credits = 5;
+  bool picking = false;
 
-  Future<void> selectPhoto() async {
-    final picker = ImagePicker();
+  Future<void> pickPhoto() async {
+    if (picking) return;
 
-    final image = await picker.pickImage(
-      source: ImageSource.gallery,
-      imageQuality: 95,
-    );
-
-    if (image == null || !mounted) return;
-
-    if (credits <= 0) {
-      showNoCredits();
-      return;
-    }
-
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => EnhanceScreen(
-          file: File(image.path),
-          onUseCredit: () {
-            setState(() {
-              credits--;
-            });
-          },
-        ),
-      ),
-    );
-  }
-
-  void rewardAd() {
-    // Real AdMob rewarded ad will be connected later.
     setState(() {
-      credits += 2;
+      picking = true;
     });
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Demo: +2 credits added'),
-      ),
-    );
-  }
+    try {
+      final XFile? picked = await _picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 100,
+      );
 
-  void showNoCredits() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: const Color(0xFF15161E),
-      builder: (_) {
-        return Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(
-                Icons.bolt,
-                size: 45,
-                color: Color(0xFFB39AFF),
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                'No Credits Left',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Watch an ad to get 2 more credits.',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white54),
-              ),
-              const SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: () {
-                    Navigator.pop(context);
-                    rewardAd();
-                  },
-                  icon: const Icon(Icons.play_arrow),
-                  label: const Text('Watch Ad +2 Credits'),
-                ),
-              ),
-            ],
+      if (!mounted) return;
+
+      if (picked != null) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => EnhanceScreen(
+              file: File(picked.path),
+              credits: credits,
+              onUseCredit: () {
+                if (mounted) {
+                  setState(() {
+                    credits--;
+                  });
+                }
+              },
+            ),
           ),
         );
-      },
-    );
+      }
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Photo select failed: $e'),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          picking = false;
+        });
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        backgroundColor: Colors.transparent,
         title: const Text(
           'XRemini',
           style: TextStyle(
-            fontWeight: FontWeight.w800,
+            fontWeight: FontWeight.bold,
+            fontSize: 24,
           ),
         ),
         actions: [
           Container(
-            margin: const EdgeInsets.only(right: 12),
+            margin: const EdgeInsets.only(right: 14),
             padding: const EdgeInsets.symmetric(
               horizontal: 12,
-              vertical: 8,
+              vertical: 7,
             ),
             decoration: BoxDecoration(
-              color: const Color(0xFF171523),
+              color: const Color(0xFF1C1C1C),
               borderRadius: BorderRadius.circular(20),
             ),
             child: Row(
@@ -229,9 +122,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 const Icon(
                   Icons.bolt,
                   size: 18,
-                  color: Color(0xFFB39AFF),
+                  color: Colors.amber,
                 ),
-                const SizedBox(width: 5),
+                const SizedBox(width: 4),
                 Text(
                   '$credits',
                   style: const TextStyle(
@@ -243,257 +136,212 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(18, 12, 18, 30),
-        children: [
-          const Text(
-            'Make every photo\nlook amazing.',
-            style: TextStyle(
-              fontSize: 32,
-              height: 1.08,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            'Enhance faces, restore old photos and create sharper HD images.',
-            style: TextStyle(
-              fontSize: 15,
-              color: Colors.white.withOpacity(.58),
-              height: 1.4,
-            ),
-          ),
-          const SizedBox(height: 24),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 15),
 
-          // MAIN BUTTON
-          InkWell(
-            borderRadius: BorderRadius.circular(24),
-            onTap: selectPhoto,
-            child: Ink(
-              padding: const EdgeInsets.all(22),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [
-                    Color(0xFF7656FF),
-                    Color(0xFF4C2EDB),
-                  ],
+              const Text(
+                'Make your photos\nlook amazing.',
+                style: TextStyle(
+                  fontSize: 34,
+                  height: 1.1,
+                  fontWeight: FontWeight.w800,
                 ),
-                borderRadius: BorderRadius.circular(24),
               ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(13),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(.14),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.auto_awesome,
-                      size: 28,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Enhance Photo',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        SizedBox(height: 4),
-                        Text(
-                          'AI HD enhancement',
-                          style: TextStyle(
-                            color: Colors.white70,
-                          ),
-                        ),
+
+              const SizedBox(height: 12),
+
+              Text(
+                'Enhance, restore and improve your photos with XRemini.',
+                style: TextStyle(
+                  color: Colors.grey.shade400,
+                  fontSize: 15,
+                  height: 1.4,
+                ),
+              ),
+
+              const SizedBox(height: 35),
+
+              GestureDetector(
+                onTap: credits > 0 ? pickPhoto : showNoCredits,
+                child: Container(
+                  width: double.infinity,
+                  height: 230,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(28),
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Color(0xFF7C4DFF),
+                        Color(0xFF4527A0),
                       ],
                     ),
                   ),
-                  const Icon(
-                    Icons.arrow_forward_ios,
-                    size: 17,
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 12),
-
-          Row(
-            children: [
-              Expanded(
-                child: featureCard(
-                  Icons.face_retouching_natural,
-                  'Face Enhance',
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: featureCard(
-                  Icons.history,
-                  'Old Restore',
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 24),
-
-          // CREDIT CARD
-          Container(
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              color: const Color(0xFF14151D),
-              borderRadius: BorderRadius.circular(22),
-              border: Border.all(
-                color: Colors.white.withOpacity(.06),
-              ),
-            ),
-            child: Row(
-              children: [
-                const CircleAvatar(
-                  radius: 24,
-                  backgroundColor: Color(0xFF28213E),
-                  child: Icon(
-                    Icons.play_arrow,
-                    color: Color(0xFFB39AFF),
-                  ),
-                ),
-                const SizedBox(width: 14),
-                const Expanded(
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text(
-                        'Need more credits?',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w700,
+                      Container(
+                        width: 72,
+                        height: 72,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(.16),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.add_photo_alternate_outlined,
+                          size: 38,
+                          color: Colors.white,
                         ),
                       ),
-                      SizedBox(height: 4),
-                      Text(
-                        'Watch a short ad and get +2 credits.',
+
+                      const SizedBox(height: 18),
+
+                      const Text(
+                        'Choose a Photo',
                         style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.white54,
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+
+                      const SizedBox(height: 7),
+
+                      Text(
+                        credits > 0
+                            ? 'Tap to select a photo'
+                            : 'No credits available',
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(.75),
                         ),
                       ),
                     ],
                   ),
                 ),
-                TextButton(
-                  onPressed: rewardAd,
-                  child: const Text('WATCH'),
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 28),
-
-          const Text(
-            'How it works',
-            style: TextStyle(
-              fontSize: 19,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-
-          const SizedBox(height: 12),
-
-          step('1', 'Choose a photo'),
-          step('2', 'Choose enhancement'),
-          step('3', 'Save your result'),
-        ],
-      ),
-    );
-  }
-
-  Widget featureCard(
-    IconData icon,
-    String title,
-  ) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(20),
-      onTap: selectPhoto,
-      child: Container(
-        height: 112,
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: const Color(0xFF14151D),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: Colors.white.withOpacity(.06),
-          ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(
-              icon,
-              color: const Color(0xFFB39AFF),
-            ),
-            const Spacer(),
-            Text(
-              title,
-              style: const TextStyle(
-                fontWeight: FontWeight.w700,
               ),
-            ),
-          ],
+
+              const SizedBox(height: 28),
+
+              const Text(
+                'Enhance modes',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+
+              const SizedBox(height: 15),
+
+              Row(
+                children: const [
+                  Expanded(
+                    child: ModeCard(
+                      icon: Icons.face_retouching_natural,
+                      title: 'Face',
+                    ),
+                  ),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: ModeCard(
+                      icon: Icons.hd,
+                      title: 'HD',
+                    ),
+                  ),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: ModeCard(
+                      icon: Icons.restore,
+                      title: 'Restore',
+                    ),
+                  ),
+                ],
+              ),
+
+              const Spacer(),
+
+              Center(
+                child: Text(
+                  '5 free credits • Watch ads to earn more',
+                  style: TextStyle(
+                    color: Colors.grey.shade500,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 12),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget step(
-    String number,
-    String title,
-  ) {
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      leading: CircleAvatar(
-        backgroundColor: const Color(0xFF1C1930),
-        child: Text(
-          number,
-          style: const TextStyle(
-            color: Color(0xFFB39AFF),
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ),
-      title: Text(
-        title,
-        style: const TextStyle(
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-      subtitle: const Text(
-        'XRemini makes the process simple.',
-        style: TextStyle(
-          color: Colors.white54,
+  void showNoCredits() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'No credits. Rewarded ads will be added next.',
         ),
       ),
     );
   }
 }
 
-// ---------------- ENHANCE ----------------
+class ModeCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+
+  const ModeCard({
+    super.key,
+    required this.icon,
+    required this.title,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 18),
+      decoration: BoxDecoration(
+        color: const Color(0xFF151515),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: Colors.white.withOpacity(.06),
+        ),
+      ),
+      child: Column(
+        children: [
+          Icon(
+            icon,
+            color: const Color(0xFFB388FF),
+            size: 28,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            title,
+            style: const TextStyle(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 class EnhanceScreen extends StatefulWidget {
   final File file;
+  final int credits;
   final VoidCallback onUseCredit;
 
   const EnhanceScreen({
     super.key,
     required this.file,
+    required this.credits,
     required this.onUseCredit,
   });
 
@@ -504,299 +352,249 @@ class EnhanceScreen extends StatefulWidget {
 class _EnhanceScreenState extends State<EnhanceScreen> {
   int selectedMode = 0;
   bool processing = false;
+  bool enhanced = false;
+
+  final List<String> modes = [
+    'Enhance',
+    'Face',
+    'HD',
+    'Restore',
+  ];
 
   Future<void> processPhoto() async {
+    if (processing) return;
+
+    if (widget.credits <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No credits available.'),
+        ),
+      );
+      return;
+    }
+
     setState(() {
       processing = true;
     });
 
-    await Future.delayed(
-      const Duration(seconds: 2),
-    );
-
-    widget.onUseCredit();
+    await Future.delayed(const Duration(seconds: 2));
 
     if (!mounted) return;
 
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (_) => ResultScreen(
-          file: widget.file,
+    widget.onUseCredit();
+
+    setState(() {
+      processing = false;
+      enhanced = true;
+    });
+  }
+
+  Future<void> savePhoto() async {
+    try {
+      final bytes = await widget.file.readAsBytes();
+
+      final result = await ImageGallerySaverPlus.saveImage(
+        bytes,
+        quality: 100,
+        name: 'XRemini_${DateTime.now().millisecondsSinceEpoch}',
+      );
+
+      if (!mounted) return;
+
+      final success =
+          result is Map && result['isSuccess'] == true;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            success
+                ? 'Photo saved to Gallery successfully!'
+                : 'Photo save request completed.',
+          ),
         ),
-      ),
-    );
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Save failed: $e'),
+        ),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Enhance Photo'),
+        title: const Text(
+          'Enhance Photo',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(18),
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(24),
-            child: Image.file(
-              widget.file,
-              height: 360,
-              fit: BoxFit.cover,
-            ),
-          ),
+      body: SafeArea(
+        child: Column(
+          children: [
+            Expanded(
+              child: Container(
+                width: double.infinity,
+                margin: const EdgeInsets.fromLTRB(
+                  16,
+                  10,
+                  16,
+                  16,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF111111),
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Image.file(
+                      widget.file,
+                      fit: BoxFit.contain,
+                    ),
 
-          const SizedBox(height: 20),
-
-          const Text(
-            'Choose enhancement',
-            style: TextStyle(
-              fontSize: 21,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-
-          const SizedBox(height: 12),
-
-          option(
-            0,
-            'HD Enhance',
-            'Sharper and clearer',
-            Icons.hd,
-          ),
-
-          option(
-            1,
-            'Face Enhance',
-            'Improve facial details',
-            Icons.face,
-          ),
-
-          option(
-            2,
-            'Old Photo Restore',
-            'Restore faded photos',
-            Icons.photo_library,
-          ),
-
-          const SizedBox(height: 14),
-
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: processing ? null : processPhoto,
-              icon: processing
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
+                    if (processing)
+                      Container(
+                        color: Colors.black.withOpacity(.65),
+                        child: const Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              CircularProgressIndicator(),
+                              SizedBox(height: 18),
+                              Text(
+                                'Enhancing photo...',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
-                    )
-                  : const Icon(Icons.auto_awesome),
-              label: Text(
-                processing
-                    ? 'Processing...'
-                    : 'Enhance • 1 Credit',
-              ),
-              style: FilledButton.styleFrom(
-                padding: const EdgeInsets.symmetric(
-                  vertical: 17,
+
+                    if (enhanced && !processing)
+                      Positioned(
+                        left: 15,
+                        top: 15,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.green.withOpacity(.9),
+                            borderRadius: BorderRadius.circular(15),
+                          ),
+                          child: const Row(
+                            children: [
+                              Icon(
+                                Icons.check,
+                                size: 16,
+                              ),
+                              SizedBox(width: 4),
+                              Text('Enhanced'),
+                            ],
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
 
-  Widget option(
-    int index,
-    String title,
-    String subtitle,
-    IconData icon,
-  ) {
-    final selected = selectedMode == index;
+            SizedBox(
+              height: 58,
+              child: ListView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                scrollDirection: Axis.horizontal,
+                itemCount: modes.length,
+                itemBuilder: (context, index) {
+                  final selected = selectedMode == index;
 
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          selectedMode = index;
-        });
-      },
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.all(15),
-        decoration: BoxDecoration(
-          color: selected
-              ? const Color(0xFF211A3B)
-              : const Color(0xFF14151D),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: selected
-                ? const Color(0xFF7656FF)
-                : Colors.white.withOpacity(.06),
-          ),
-        ),
-        child: Row(
-          children: [
-            Icon(
-              icon,
-              color: selected
-                  ? const Color(0xFFB39AFF)
-                  : Colors.white54,
+                  return GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        selectedMode = index;
+                      });
+                    },
+                    child: Container(
+                      margin: const EdgeInsets.only(right: 10),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                      ),
+                      decoration: BoxDecoration(
+                        color: selected
+                            ? const Color(0xFF7C4DFF)
+                            : const Color(0xFF181818),
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        modes[index],
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
             ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
                 children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(context);
+                      },
+                      icon: const Icon(Icons.arrow_back),
+                      label: const Text('Again'),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 16,
+                        ),
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 3),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Colors.white54,
+
+                  const SizedBox(width: 12),
+
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: enhanced ? savePhoto : processPhoto,
+                      icon: Icon(
+                        enhanced
+                            ? Icons.download
+                            : Icons.auto_fix_high,
+                      ),
+                      label: Text(
+                        enhanced ? 'Save' : 'Enhance',
+                      ),
+                      style: FilledButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 16,
+                        ),
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
-            if (selected)
-              const Icon(
-                Icons.check_circle,
-                color: Color(0xFFB39AFF),
-              ),
           ],
         ),
       ),
     );
   }
 }
-
-// ---------------- RESULT ----------------
-
-class ResultScreen extends StatelessWidget {
-  final File file;
-
-  const ResultScreen({
-    super.key,
-    required this.file,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Your Result'),
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          children: [
-            Expanded(
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(24),
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    Image.file(
-                      file,
-                      fit: BoxFit.cover,
-                    ),
-
-                    Align(
-                      alignment: Alignment.center,
-                      child: Container(
-                        width: 2,
-                        color: Colors.white,
-                      ),
-                    ),
-
-                    const Positioned(
-                      left: 14,
-                      top: 14,
-                      child: ResultTag('BEFORE'),
-                    ),
-
-                    const Positioned(
-                      right: 14,
-                      top: 14,
-                      child: ResultTag('AFTER'),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 18),
-
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () {
-                      Navigator.pop(context);
-                    },
-                    icon: const Icon(Icons.refresh),
-                    label: const Text('Again'),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                        vertical: 16,
-                      ),
-                    ),
-                  ),
-                ),
-
-                const SizedBox(width: 12),
-
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: () async {
-  try {
-    final hasAccess = await Gal.hasAccess();
-
-    if (!hasAccess) {
-      final granted = await Gal.requestAccess();
-
-      if (!granted) {
-        if (!context.mounted) return;
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Gallery permission is required.'),
-          ),
-        );
-        return;
-      }
-    }
-
-    await Gal.putImage(
-      file.path,
-      album: 'XRemini',
-    );
-
-    if (!context.mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Photo saved successfully!'),
-      ),
-    );
-  } catch (e) {
-    if (!context.mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Unable to save photo.'),
-      ),
-    );
-  }
-},
