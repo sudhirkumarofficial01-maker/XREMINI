@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
-
+import 'package:gal/gal.dart';
 void main() {
   runApp(const XReminiApp());
 }
@@ -760,60 +759,44 @@ class ResultScreen extends StatelessWidget {
 
                 Expanded(
                   child: FilledButton.icon(
-                    onPressed: () {
-                      ScaffoldMessenger.of(context)
-                          .showSnackBar(
-                        const SnackBar(
-                           content: Text(
-                            'Save feature will be connected next.',
-                          ),
-                        ),
-                      );
-                    },
-                    icon: const Icon(Icons.download),
-                    label: const Text('Save'),
-                    style: FilledButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                        vertical: 16,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
+                    onPressed: () async {
+  try {
+    final hasAccess = await Gal.hasAccess();
+
+    if (!hasAccess) {
+      final granted = await Gal.requestAccess();
+
+      if (!granted) {
+        if (!context.mounted) return;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Gallery permission is required.'),
+          ),
+        );
+        return;
+      }
+    }
+
+    await Gal.putImage(
+      file.path,
+      album: 'XRemini',
+    );
+
+    if (!context.mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Photo saved successfully!'),
+      ),
+    );
+  } catch (e) {
+    if (!context.mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Unable to save photo.'),
       ),
     );
   }
-}
-
-class ResultTag extends StatelessWidget {
-  final String text;
-
-  const ResultTag(
-    this.text, {
-    super.key,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 10,
-        vertical: 6,
-      ),
-      decoration: BoxDecoration(
-        color: Colors.black54,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        text,
-        style: const TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-    );
-  }
-}
+},
