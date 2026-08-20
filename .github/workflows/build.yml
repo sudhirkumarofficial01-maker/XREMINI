@@ -21,28 +21,35 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Create Android Flutter project
+      - name: Create Android project
         run: |
-          flutter create --platforms android --project-name xremini build_app
+          flutter create \
+            --platforms android \
+            --project-name xremini \
+            --org com.xremini \
+            build_app
+
+      - name: Copy XRemini source
+        run: |
           cp pubspec.yaml build_app/pubspec.yaml
           rm -rf build_app/lib
           cp -r lib build_app/lib
 
-      - name: Set Android compile SDK
+      - name: Configure Android SDK
         working-directory: build_app
         run: |
           sed -i 's/compileSdk = flutter.compileSdkVersion/compileSdk = 35/' android/app/build.gradle
-          grep -n "compileSdk" android/app/build.gradle
+          sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 24/' android/app/build.gradle
 
       - name: Install dependencies
         working-directory: build_app
         run: flutter pub get
 
-      - name: Build APK
+      - name: Build release APK
         working-directory: build_app
         run: flutter build apk --release
 
-      - name: Upload APK
+      - name: Upload XRemini APK
         uses: actions/upload-artifact@v4
         with:
           name: XRemini-release
